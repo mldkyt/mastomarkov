@@ -1,0 +1,11 @@
+[project]
+name = "mkmarkov"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "markovify>=0.9.4",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "sqlalchemy>=2.0.45",
+]
