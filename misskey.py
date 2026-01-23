@@ -19,7 +19,7 @@ class Misskey:
         self.token: str = token
         print("[Misskey] API authorizing against", instance)
 
-        me_api = post(f"https://{instance}/api/i", headers={"Authorization": f"Bearer {token}"}, json={}, )
+        me_api = post(f"{instance}/api/i", headers={"Authorization": f"Bearer {token}"}, json={}, )
 
         self.me: dict = me_api.json()
 
@@ -36,7 +36,7 @@ class Misskey:
             print("[Misskey] API Call without logged in")
             return
 
-        a = post(f"https://{self.instance}/api/users/followers", json={"limit": 100, "userId": self.me["id"]},
+        a = post(f"{self.instance}/api/users/followers", json={"limit": 100, "userId": self.me["id"]},
             headers={"Authorization": f"Bearer {self.token}"}, )
         if not a.ok:
             return
@@ -55,7 +55,7 @@ class Misskey:
         while True:
             sleep(0.5)
 
-            next_followers = post(f"https://{self.instance}/api/users/followers",
+            next_followers = post(f"{self.instance}/api/users/followers",
                 json={"limit": 100, "userId": self.me["id"], "untilId": last_follow_id},
                 headers={"Authorization": f"Bearer {self.token}"}, )
 
@@ -76,7 +76,7 @@ class Misskey:
             return None
 
         # Try fetch
-        user_api = post(f"https://{self.instance}/api/users/show", json={"userId": user_id},
+        user_api = post(f"{self.instance}/api/users/show", json={"userId": user_id},
             headers={"Authorization": f"Bearer {self.token}"}, )
 
         if not user_api.ok:
@@ -105,13 +105,13 @@ class Misskey:
             return False
 
         # Follow
-        req = post(f"https://{self.instance}/api/following/create", headers={"Authorization": f"Bearer {self.token}"},
+        req = post(f"{self.instance}/api/following/create", headers={"Authorization": f"Bearer {self.token}"},
             json={"userId": user_id}, )
 
         if req.status_code == 429:
             # Try again after a delay
             sleep(5)
-            req = post(f"https://{self.instance}/api/following/create",
+            req = post(f"{self.instance}/api/following/create",
                 headers={"Authorization": f"Bearer {self.token}"}, json={"userId": user_id}, )
 
         return req.ok
@@ -121,12 +121,12 @@ class Misskey:
             print("[Misskey] API Call without logged in")
             return False
 
-        req = post(f"https://{self.instance}/api/following/delete", headers={"Authorization": f"Bearer {self.token}"},
+        req = post(f"{self.instance}/api/following/delete", headers={"Authorization": f"Bearer {self.token}"},
             json={"userId": user_id}, )
 
         if req.status_code == 429:
             sleep(5)
-            req = post(f"https://{self.instance}/api/following/delete",
+            req = post(f"{self.instance}/api/following/delete",
                 headers={"Authorization": f"Bearer {self.token}"}, json={"userId": user_id}, )
 
         return req.ok
@@ -152,7 +152,7 @@ class Misskey:
         if cw is not None:
             body["cw"] = cw
 
-        req = post(f"https://{self.instance}/api/notes/create", headers={"Authorization": f"Bearer {self.token}"},
+        req = post(f"{self.instance}/api/notes/create", headers={"Authorization": f"Bearer {self.token}"},
             json=body, )
 
         return req.ok
@@ -162,7 +162,7 @@ class Misskey:
             print("[Misskey] API Call without logged in")
             return None
 
-        req = post(f"https://{self.instance}/api/users/relation", headers={"Authorization": f"Bearer {self.token}"},
+        req = post(f"{self.instance}/api/users/relation", headers={"Authorization": f"Bearer {self.token}"},
             json={"userId": user_id}, )
 
         print(req)
@@ -193,7 +193,7 @@ class Misskey:
             print("[Misskey] API Call without logged in")
             return []
 
-        req = post(f"https://{self.instance}/api/i/notifications", headers={"Authorization": f"Bearer {self.token}", },
+        req = post(f"{self.instance}/api/i/notifications", headers={"Authorization": f"Bearer {self.token}", },
             json={"limit": 10, "markAsRead": False, "includeTypes": ["reply", "mention"], }, )
 
         if not req.ok:
@@ -206,7 +206,7 @@ class Misskey:
             print("[Misskey] API Call without logged in")
             return
 
-        first_fetch_notes = post(f"https://{self.instance}/api/users/notes",
+        first_fetch_notes = post(f"{self.instance}/api/users/notes",
             json={"limit": 100, "userId": user_id, "withRenotes": False, "withQuotes": True, "withReplies": True, },
             headers={"Authorization": f"Bearer {self.token}"}, )
         if not first_fetch_notes.ok:
@@ -234,7 +234,7 @@ class Misskey:
         while True:
             sleep(0.5)
 
-            next_notes = post(f"https://{self.instance}/api/users/notes",
+            next_notes = post(f"{self.instance}/api/users/notes",
                 json={"limit": 100, "userId": user_id, "untilId": last_note, "withRenotes": False, "withQuotes": True,
                     "withReplies": True, }, headers={"Authorization": f"Bearer {self.token}"}, )
 
