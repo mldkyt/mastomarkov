@@ -170,7 +170,7 @@ class Misskey:
         if not req.ok:
             return None
 
-        return req.json()
+        return req.json()[0]
 
     def get_effective_name(self, i: dict | str):
         if not self.logged_in:
