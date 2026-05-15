@@ -1,15 +1,13 @@
-# MkMarkov
+# MastoMarkov
 
-Simple Sharkey bot that takes posts from a user and creates markov posts. Currently only supports having both accounts on the same instance.
+Simple Mastodon API bot that takes posts from a user and creates markov posts. 
 
 ## .env
 
 ```text
-MISSKEY_INSTANCE=sk.lunya.pet
-MISSKEY_TOKEN=<token>
-MISSKEY_ID=aevr9qg4loh00006
+TARGET=lunya@sk.lunya.pet
 ```
 
-change the values above to your misskey instance and it should work hopefully
+run auth.py to authenticate the account that posts, the target is the acct (handle without the first @) of the account that gets scanned for posts
 
-the bot posts exactly on the right time, and scans posts every day automatically so it won't post too late
+the bot posts exactly on the right time, and scans posts every day automatically so it will post on the same time always
