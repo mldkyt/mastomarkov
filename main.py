@@ -2,18 +2,23 @@ import asyncio
 import datetime
 import os
 import re
+import typing
 from os import getenv
 
+import bs4
 import markovify
+from bs4 import BeautifulSoup
+from mastodon import Mastodon
 from sqlalchemy import select, insert, update
 
 from database import last_scan_table, engine, posts_table
 from logger import get_logger
-from misskey import Misskey
 from dotenv import load_dotenv
 
-mkmarkov_logger = get_logger("mkmarkov")
-misskey = Misskey()
+mastodon = Mastodon(access_token="data/pytooter_usercred.secret")
+me = mastodon.me()
+
+mastomarkov_logger = get_logger("mastomarkov")
 
 def sanitize_formatting(text: str) -> str:
     result = []
@@ -140,58 +145,79 @@ def sanitize_formatting(text: str) -> str:
 
     return "".join(result)
 
+# borrowed from https://stackoverflow.com/questions/30337528/make-beautifulsoup-handle-line-breaks-as-a-browser-would
+def get_text(tag: bs4.Tag) -> str:
+    _inline_elements = {"a","span","em","strong","u","i","font","mark","label",
+                        "s","sub","sup","tt","bdo","button","cite","del","b","a","font",}
+
+    def _get_text(tag: bs4.Tag) -> typing.Generator:
+        for child in tag.children:
+            if isinstance(child, bs4.Tag):
+                # if the tag is a block type tag then yield new lines before after
+                is_block_element = child.name not in _inline_elements
+                if is_block_element:
+                    yield "\n"
+                yield from ["\n"] if child.name == "br" else _get_text(child)
+                if is_block_element:
+                    yield "\n"
+            elif isinstance(child, bs4.NavigableString):
+                yield child.string
+
+    return "".join(_get_text(tag))
 
 async def get_posts():
-    MISSKEY_ID = getenv("MISSKEY_ID")
-    global misskey
-    user = misskey.get_user(MISSKEY_ID)
+    le_target_env = os.getenv("TARGET", "")
+    le_target = mastodon.account_search(le_target_env)
+    if len(le_target) == 0:
+        raise ValueError(f"Account with name {le_target_env} not found")
+    le_target = le_target[0]
 
     while True:
         with engine.begin() as c:
             try:
                 # Full check date check
                 a = c.execute(
-                    select(last_scan_table.c.last_scan).where((last_scan_table.c.id == MISSKEY_ID))).fetchone()
+                    select(last_scan_table.c.last_scan).where((last_scan_table.c.id == le_target.id))).fetchone()
                 if a is None:
-                    c.execute(insert(last_scan_table).values(id=MISSKEY_ID, last_scan=datetime.datetime.now()))
+                    c.execute(insert(last_scan_table).values(id=le_target.id, last_scan=datetime.datetime.now()))
 
                     do_full_scan = False
                 else:
                     if (datetime.datetime.now() - a[0]).total_seconds() > 1209600:
                         do_full_scan = True
-                        c.execute(update(last_scan_table).where((last_scan_table.c.id == MISSKEY_ID)).values(
+                        c.execute(update(last_scan_table).where((last_scan_table.c.id == le_target.id)).values(
                             last_scan=datetime.datetime.now()))
 
-                        mkmarkov_logger.info("Full-scan performing on %s", misskey.get_effective_name(user))
+                        mastomarkov_logger.info("Full-scan performing on us")
                     else:
                         do_full_scan = False
 
                 # Start fetching notes
-                for j in misskey.get_notes(MISSKEY_ID):
+                for j in mastodon.pagination_iterator(mastodon.account_statuses(le_target)):
                     # Skip if we hit enough notes and no full scan is being performed
-                    a = c.execute(select(posts_table.c.id).where((posts_table.c.id == str(j["id"])))).fetchone()
+                    a = c.execute(select(posts_table.c.id).where((posts_table.c.id == str(j.id)))).fetchone()
                     if a is not None:
                         if do_full_scan:
                             continue
                         else:
                             break
 
-                    if j["visibility"] != "public" and j["visibility"] != "unlisted":
+                    if j.visibility != "public" and j.visibility != "unlisted":
                         continue
 
-                    text = j["text"]
+                    text = get_text(BeautifulSoup(j.content))
 
                     c.execute(
                         insert(posts_table).values(
-                            id=str(j["id"]),
+                            id=str(j.id),
                             text=text,
                             has_cw=False,
-                            visibility=j["visibility"],
-                            author=misskey.get_effective_name(j["user"]),
+                            visibility=j.visibility,
+                            author=le_target.acct,
                         )
                     )
             except Exception:
-                mkmarkov_logger.exception("Failed to query posts for %s", misskey.get_effective_name(user))
+                mastomarkov_logger.exception("Failed to query posts for %s", le_target.acct)
 
         await asyncio.sleep(86400)
 
@@ -203,7 +229,6 @@ async def generate_markov():
     REMOVE_MENTIONS = getenv("REMOVE_MENTIONS", "0") == "1"
     REMOVE_HASHTAGS = getenv("REMOVE_HASHTAGS", "0") == "1"
     DEBUG = getenv("DEBUG", "0") == "1"
-
 
     while True:
         try:
@@ -224,7 +249,8 @@ async def generate_markov():
 
             if len(posts) == 0:
                 print("No posts")
-                exit(0)
+                await asyncio.sleep(10) # wait 10 seconds and try again
+                continue
 
             posts = "\n".join(posts)
 
@@ -251,9 +277,9 @@ async def generate_markov():
             if DEBUG:
                 print(output)
             else:
-                misskey.post(output)
+                mastodon.toot(output)
         except Exception:
-            mkmarkov_logger.exception("Error occured:")
+            mastomarkov_logger.exception("Error occurred:")
 
         await asyncio.sleep(3600)
 
@@ -264,24 +290,13 @@ def check_env(*items: str):
             exit(1)
 
 async def main():
-    print("Hello from mkmarkov!")
-
-    check_env("MISSKEY_INSTANCE", "MISSKEY_TOKEN", "MISSKEY_ID")
+    print("Hello from mastomarkov!")
 
     load_dotenv()
 
-    MISSKEY_INSTANCE = getenv("MISSKEY_INSTANCE")
-    MISSKEY_TOKEN = getenv("MISSKEY_TOKEN")
-
-    if not isinstance(MISSKEY_INSTANCE, str) or not isinstance(MISSKEY_TOKEN, str):
-        print("Invalid MISSKEY_INSTANCE or MISSKEY_TOKEN")
-        exit(1)
-
-    global misskey
-    misskey.log_in(MISSKEY_INSTANCE, MISSKEY_TOKEN)
+    check_env("TARGET")
 
     # start tasks
-
     tasks = [asyncio.create_task(get_posts()), asyncio.create_task(generate_markov())]
 
     print("Starting tasks")
