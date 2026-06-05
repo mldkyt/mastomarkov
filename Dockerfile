@@ -13,5 +13,6 @@ RUN uv sync
 COPY main.py .
 COPY auth.py .
 COPY database.py .
+COPY logger.py .
 
 ENTRYPOINT ["uv", "run", "main.py"]
