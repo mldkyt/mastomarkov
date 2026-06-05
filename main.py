@@ -277,7 +277,7 @@ async def generate_markov():
             if DEBUG:
                 print(output)
             else:
-                mastodon.toot(output)
+                mastodon.status_post(output, spoiler_text="Markov generated post", visibility="unlisted")
         except Exception:
             mastomarkov_logger.exception("Error occurred:")
 
